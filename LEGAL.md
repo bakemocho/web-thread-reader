@@ -2,28 +2,33 @@
 
 ## Scope
 
-`x-capture-kit` is an independent, open-source toolkit for capturing and organizing post data from X in local workflows.
+`web-thread-reader` is an independent, open-source browser extension for user-triggered read-aloud workflows.
 
 ## No Affiliation
 
-- This project is not affiliated with, endorsed by, or sponsored by X Corp.
-- `X`, `Twitter`, and related names/logos are trademarks of their respective owners.
+- This project is not affiliated with, endorsed by, or sponsored by X Corp., Google, Dreamtonics, or any browser or TTS vendor.
+- Product names and trademarks belong to their respective owners.
 
 ## Terms and Policy Compliance
 
-- You are responsible for complying with the X Terms of Service, platform policies, and applicable laws in your jurisdiction.
-- Use this toolkit only for lawful and authorized purposes.
+- You are responsible for complying with website terms of service, platform policies, and applicable laws in your jurisdiction.
+- Use this extension only for lawful and authorized purposes.
 
-## Data and Content Responsibility
+## Third-Party Dictionaries and Voices
 
-- Captured content may include third-party text, media links, and metadata.
-- You are responsible for storage, handling, sharing, and deletion of captured data.
-- You are responsible for respecting copyright, privacy, and other rights of content owners.
+- This repository does not include third-party pronunciation dictionary datasets.
+- Optional Voicepeak companion setups may use user-provided dictionary files, which are licensed by their original authors.
+- You are responsible for verifying license compatibility before redistribution, commercial use, or bundled delivery.
+
+## Content Responsibility
+
+- Read-aloud targets may include third-party text and metadata.
+- You are responsible for handling any captured or processed content in compliance with copyright, privacy, and related rights.
 
 ## Passive, User-Triggered Tooling
 
-This toolkit is designed for passive data capture initiated by the user.
-It is not an autonomous agent and does not perform account actions without explicit user interaction.
+This extension is designed for explicit user-triggered reading actions.
+It is not an autonomous agent and does not perform account actions without user interaction.
 
 ## No Warranty
 

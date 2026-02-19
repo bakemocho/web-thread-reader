@@ -35,6 +35,12 @@ Current implementation reference (from private workspace history):
 
 - local bridge API behavior and request schema are described in docs/chrome-web-store notes
 
+## Dictionary policy (Voicepeak companion)
+
+- This extension does not bundle pronunciation dictionary datasets.
+- The reader works without any external dictionary by default.
+- If you configure an external dictionary in your local Voicepeak companion setup, you are responsible for acquisition and license compliance.
+
 ## Project layout
 
 ```text
