@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Web Thread Reader</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <h1>Web Thread Reader</h1>
+
+      <div class="actions">
+        <button id="play-pause" class="btn primary">Play</button>
+        <button id="reset" class="btn danger">Reset</button>
+      </div>
+
+      <section class="settings">
+        <h2>Speech Settings</h2>
+
+        <label>
+          <span>Engine</span>
+          <select id="engine">
+            <option value="browser">Browser TTS</option>
+            <option value="voicepeak">Voicepeak (local)</option>
+          </select>
+        </label>
+
+        <label class="wide">
+          <span>Voicepeak API</span>
+          <input id="voicepeak-endpoint" type="text" />
+        </label>
+
+        <label class="wide">
+          <span>API token</span>
+          <input id="voicepeak-token" type="password" />
+        </label>
+
+        <label>
+          <span>Rate</span>
+          <input id="rate" type="number" min="0.5" max="2" step="0.1" />
+        </label>
+
+        <label>
+          <span>Pitch</span>
+          <input id="pitch" type="number" min="0" max="2" step="0.1" />
+        </label>
+
+        <label>
+          <span>Volume</span>
+          <input id="volume" type="number" min="0" max="1" step="0.1" />
+        </label>
+
+        <label>
+          <span>Max chars</span>
+          <input id="max-chars" type="number" min="500" max="40000" step="100" />
+        </label>
+
+        <label>
+          <span>Chunk chars</span>
+          <input id="chunk-chars" type="number" min="60" max="500" step="10" />
+        </label>
+      </section>
+
+      <p id="status" class="status">Ready.</p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
