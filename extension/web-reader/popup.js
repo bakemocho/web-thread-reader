@@ -145,8 +145,8 @@ function splitIntoSpeechChunks(text, chunkChars) {
 
     if (!current) {
       current = sentence;
-    } else if ((current + sentence).length <= maxLen) {
-      current += sentence;
+    } else if ((current + "\n" + sentence).length <= maxLen) {
+      current += `\n${sentence}`;
     } else {
       pushCurrent();
       current = sentence;
@@ -496,8 +496,8 @@ async function runTabSpeechCommand(tabId, message, fallbackError) {
 
           if (!current) {
             current = sentence;
-          } else if ((current + sentence).length <= maxLen) {
-            current += sentence;
+          } else if ((current + "\n" + sentence).length <= maxLen) {
+            current += `\n${sentence}`;
           } else {
             pushCurrent();
             current = sentence;

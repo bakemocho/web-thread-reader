@@ -119,8 +119,8 @@
 
       if (!current) {
         current = sentence;
-      } else if ((current + sentence).length <= maxLen) {
-        current += sentence;
+      } else if ((current + "\n" + sentence).length <= maxLen) {
+        current += `\n${sentence}`;
       } else {
         pushCurrent();
         current = sentence;
@@ -587,9 +587,7 @@
     };
 
     const collectFromScope = (scope) => {
-      const richViews = Array.from(scope.querySelectorAll('[data-testid="twitterArticleRichTextView"]')).filter(
-        (node) => isVisibleElement(node)
-      );
+      const richViews = Array.from(scope.querySelectorAll('[data-testid="twitterArticleRichTextView"]'));
       if (richViews.length > 0) {
         for (const node of richViews) {
           pushRoot(node);
@@ -597,9 +595,7 @@
         return;
       }
 
-      const longforms = Array.from(scope.querySelectorAll('[data-testid="longformRichTextComponent"]')).filter(
-        (node) => isVisibleElement(node)
-      );
+      const longforms = Array.from(scope.querySelectorAll('[data-testid="longformRichTextComponent"]'));
       for (const node of longforms) {
         pushRoot(node);
       }
@@ -649,6 +645,74 @@
     return out;
   }
 
+  function extractLongformLinesFromRoot(root) {
+    const lines = [];
+    const seenLines = new Set();
+    const seenComponents = new Set();
+
+    const pushLine = (text) => {
+      const normalized = normalizeSpaces(text);
+      if (!normalized || seenLines.has(normalized)) {
+        return false;
+      }
+      seenLines.add(normalized);
+      lines.push(normalized);
+      return true;
+    };
+
+    const components = [];
+    if (root && typeof root.matches === "function" && root.matches('[data-testid="longformRichTextComponent"]')) {
+      components.push(root);
+      seenComponents.add(root);
+    }
+    for (const node of Array.from(root.querySelectorAll('[data-testid="longformRichTextComponent"]'))) {
+      if (seenComponents.has(node)) {
+        continue;
+      }
+      seenComponents.add(node);
+      components.push(node);
+    }
+
+    for (const component of components) {
+      const blocks = Array.from(component.querySelectorAll('[data-block="true"]'));
+      if (blocks.length === 0) {
+        pushLine(component.innerText);
+        continue;
+      }
+
+      for (const block of blocks) {
+        if (block.closest('[data-testid="simpleTweet"]')) {
+          continue;
+        }
+
+        const spans = Array.from(block.querySelectorAll('[data-text="true"]'));
+        if (spans.length > 0) {
+          const text = spans.map((span) => String(span.textContent || "")).join("");
+          pushLine(text);
+          continue;
+        }
+
+        pushLine(block.innerText);
+      }
+    }
+
+    if (lines.length > 0) {
+      return removeCompositeDuplicateLines(lines);
+    }
+
+    const textNodes = pickPreferredLongformNodes(root);
+    for (const node of textNodes) {
+      if (node.closest('[data-testid="simpleTweet"]')) {
+        continue;
+      }
+      pushLine(node.innerText);
+    }
+    if (lines.length === 0) {
+      pushLine(root.innerText);
+    }
+    return removeCompositeDuplicateLines(lines);
+  }
+
   function extractXArticleText() {
     const lines = [];
     const seen = new Set();
@@ -692,27 +756,31 @@
     }
 
     const richRoots = articleScopes.roots;
+    const rootCandidates = [];
     for (const root of richRoots) {
-      if (!isVisibleElement(root)) {
+      const rootLines = extractLongformLinesFromRoot(root);
+      const rootText = normalizeSpaces(rootLines.join("\n"));
+      if (!rootText) {
         continue;
       }
-      hasVisibleArticleRoot = true;
+      rootCandidates.push({
+        lines: rootLines,
+        chars: rootText.length,
+        visible: isVisibleElement(root),
+      });
+    }
 
-      let pushed = 0;
-      const textNodes = pickPreferredLongformNodes(root);
-
-      for (const node of textNodes) {
-        // Embedded tweet text is handled by thread extraction, so skip here.
-        if (node.closest('[data-testid="simpleTweet"]')) {
-          continue;
-        }
-        if (pushArticleLine(node.innerText)) {
-          pushed += 1;
-        }
+    rootCandidates.sort((a, b) => {
+      if (b.chars !== a.chars) {
+        return b.chars - a.chars;
       }
+      return Number(b.visible) - Number(a.visible);
+    });
 
-      if (pushed === 0) {
-        pushArticleLine(root.innerText);
+    if (rootCandidates.length > 0) {
+      hasVisibleArticleRoot = true;
+      for (const line of rootCandidates[0].lines) {
+        pushArticleLine(line);
       }
     }
 

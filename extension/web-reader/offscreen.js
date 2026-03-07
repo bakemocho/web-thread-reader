@@ -83,8 +83,8 @@ function splitIntoChunks(text, chunkChars) {
 
     if (!current) {
       current = sentence;
-    } else if ((current + sentence).length <= maxLen) {
-      current += sentence;
+    } else if ((current + "\n" + sentence).length <= maxLen) {
+      current += `\n${sentence}`;
     } else {
       pushCurrent();
       current = sentence;
@@ -192,17 +192,21 @@ function startSpeaking(text, settings) {
     lang,
   });
 
-  let index = 0;
-  const speakNext = () => {
+  let finishedChunks = 0;
+  const finalizeChunk = () => {
     if (activeSession !== sessionId) {
       return;
     }
-    if (index >= chunks.length) {
+    finishedChunks += 1;
+    if (finishedChunks >= chunks.length) {
       markIdleState();
-      return;
     }
+  };
 
-    const utterance = new SpeechSynthesisUtterance(chunks[index]);
+  // Queue all chunks up-front so the browser speech engine can transition
+  // between chunks without waiting for JS onend scheduling.
+  for (const chunk of chunks) {
+    const utterance = new SpeechSynthesisUtterance(chunk);
     utterance.lang = lang;
     utterance.rate = clamp(Number(mergedSettings.rate) || DEFAULT_SETTINGS.rate, 0.5, 2);
     utterance.pitch = clamp(Number(mergedSettings.pitch) || DEFAULT_SETTINGS.pitch, 0, 2);
@@ -211,33 +215,10 @@ function startSpeaking(text, settings) {
       utterance.voice = voice;
     }
 
-    utterance.onend = () => {
-      if (activeSession !== sessionId) {
-        return;
-      }
-      index += 1;
-      if (index >= chunks.length) {
-        markIdleState();
-        return;
-      }
-      speakNext();
-    };
-    utterance.onerror = () => {
-      if (activeSession !== sessionId) {
-        return;
-      }
-      index += 1;
-      if (index >= chunks.length) {
-        markIdleState();
-        return;
-      }
-      speakNext();
-    };
-
+    utterance.onend = finalizeChunk;
+    utterance.onerror = finalizeChunk;
     window.speechSynthesis.speak(utterance);
-  };
-
-  speakNext();
+  }
 
   return {
     ok: true,
