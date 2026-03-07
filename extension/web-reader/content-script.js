@@ -14,6 +14,17 @@
     maxChars: 8000,
     chunkChars: 180,
   };
+  const PLAYER_STATE = {
+    IDLE: "idle",
+    PLAYING: "playing",
+    PAUSED: "paused",
+  };
+  const PLAYER_IDLE_STATE = {
+    state: PLAYER_STATE.IDLE,
+    chars: 0,
+    chunks: 0,
+    lang: null,
+  };
 
   const X_HOSTS = new Set(["x.com", "www.x.com", "twitter.com", "www.twitter.com"]);
   const STATUS_ID_PATTERN = /\/status\/(\d{8,25})/;
@@ -41,6 +52,7 @@
   ].join(",");
 
   let sessionId = 0;
+  let playerState = { ...PLAYER_IDLE_STATE };
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -119,9 +131,91 @@
     return chunks;
   }
 
+  function snapshotPlayerState() {
+    return { ...playerState };
+  }
+
+  function setPlayerState(partial) {
+    playerState = {
+      ...playerState,
+      ...(partial || {}),
+    };
+  }
+
+  function markPlayerIdle() {
+    playerState = { ...PLAYER_IDLE_STATE };
+  }
+
   function stopSpeaking() {
     sessionId += 1;
-    window.speechSynthesis.cancel();
+    if (window.speechSynthesis && typeof window.speechSynthesis.cancel === "function") {
+      window.speechSynthesis.cancel();
+    }
+    markPlayerIdle();
+    return {
+      ok: true,
+      ...snapshotPlayerState(),
+      transport: "tab_local",
+    };
+  }
+
+  function pauseSpeaking() {
+    const synth = window.speechSynthesis;
+    if (!synth || typeof synth.pause !== "function") {
+      return { ok: false, error: "Browser speech API unavailable." };
+    }
+    if (playerState.state !== PLAYER_STATE.PLAYING) {
+      return { ok: false, error: "Browser TTS is not playing." };
+    }
+    if (!synth.speaking && !synth.pending) {
+      return { ok: false, error: "No active browser playback." };
+    }
+
+    synth.pause();
+    setPlayerState({ state: PLAYER_STATE.PAUSED });
+    return {
+      ok: true,
+      ...snapshotPlayerState(),
+      transport: "tab_local",
+    };
+  }
+
+  function resumeSpeaking() {
+    const synth = window.speechSynthesis;
+    if (!synth || typeof synth.resume !== "function") {
+      return { ok: false, error: "Browser speech API unavailable." };
+    }
+    if (playerState.state !== PLAYER_STATE.PAUSED) {
+      return { ok: false, error: "Browser TTS is not paused." };
+    }
+
+    synth.resume();
+    setPlayerState({ state: PLAYER_STATE.PLAYING });
+    return {
+      ok: true,
+      ...snapshotPlayerState(),
+      transport: "tab_local",
+    };
+  }
+
+  function getPlayerStatus() {
+    const synth = window.speechSynthesis;
+    if (
+      playerState.state === PLAYER_STATE.PLAYING &&
+      synth &&
+      typeof synth.speaking === "boolean" &&
+      typeof synth.pending === "boolean" &&
+      !synth.speaking &&
+      !synth.pending
+    ) {
+      markPlayerIdle();
+    }
+
+    return {
+      ok: true,
+      ...snapshotPlayerState(),
+      transport: "tab_local",
+    };
   }
 
   function pickVoice(lang) {
@@ -158,17 +252,31 @@
     const activeSession = sessionId;
     const lang = isJapaneseText(normalized) ? "ja-JP" : "en-US";
     const voice = pickVoice(lang);
-
-    let index = 0;
-    const speakNext = () => {
+    setPlayerState({
+      state: PLAYER_STATE.PLAYING,
+      chars: normalized.length,
+      chunks: chunks.length,
+      lang,
+    });
+    let finishedChunks = 0;
+    const finalizeChunk = () => {
       if (activeSession !== sessionId) {
         return;
       }
-      if (index >= chunks.length) {
-        return;
+      finishedChunks += 1;
+      if (finishedChunks >= chunks.length) {
+        markPlayerIdle();
+      }
+    };
+
+    // Queue all chunks up-front so the browser speech engine can continue
+    // seamlessly between chunks.
+    for (const chunk of chunks) {
+      if (activeSession !== sessionId) {
+        break;
       }
 
-      const utterance = new SpeechSynthesisUtterance(chunks[index]);
+      const utterance = new SpeechSynthesisUtterance(chunk);
       utterance.lang = lang;
       utterance.rate = clamp(Number(settings.rate) || DEFAULT_SETTINGS.rate, 0.5, 2);
       utterance.pitch = clamp(Number(settings.pitch) || DEFAULT_SETTINGS.pitch, 0, 2);
@@ -176,26 +284,16 @@
       if (voice) {
         utterance.voice = voice;
       }
-
-      utterance.onend = () => {
-        index += 1;
-        speakNext();
-      };
-      utterance.onerror = () => {
-        index += 1;
-        speakNext();
-      };
+      utterance.onend = finalizeChunk;
+      utterance.onerror = finalizeChunk;
 
       window.speechSynthesis.speak(utterance);
-    };
-
-    speakNext();
+    }
 
     return {
       ok: true,
-      chars: normalized.length,
-      chunks: chunks.length,
-      lang,
+      ...snapshotPlayerState(),
+      transport: "tab_local",
     };
   }
 
@@ -672,16 +770,20 @@
     return { ok: true, text: joined };
   }
 
+  function normalizeSettings(value) {
+    const raw = value && typeof value === "object" ? value : {};
+    return {
+      rate: clamp(Number(raw.rate) || DEFAULT_SETTINGS.rate, 0.5, 2),
+      pitch: clamp(Number(raw.pitch) || DEFAULT_SETTINGS.pitch, 0, 2),
+      volume: clamp(Number(raw.volume) || DEFAULT_SETTINGS.volume, 0, 1),
+      maxChars: Math.trunc(clamp(Number(raw.maxChars) || DEFAULT_SETTINGS.maxChars, 500, 40000)),
+      chunkChars: Math.trunc(clamp(Number(raw.chunkChars) || DEFAULT_SETTINGS.chunkChars, 60, 500)),
+    };
+  }
+
   async function loadSettings() {
     const stored = await chrome.storage.local.get({ [SETTINGS_KEY]: DEFAULT_SETTINGS });
-    const value = stored[SETTINGS_KEY] || DEFAULT_SETTINGS;
-    return {
-      rate: clamp(Number(value.rate) || DEFAULT_SETTINGS.rate, 0.5, 2),
-      pitch: clamp(Number(value.pitch) || DEFAULT_SETTINGS.pitch, 0, 2),
-      volume: clamp(Number(value.volume) || DEFAULT_SETTINGS.volume, 0, 1),
-      maxChars: Math.trunc(clamp(Number(value.maxChars) || DEFAULT_SETTINGS.maxChars, 500, 40000)),
-      chunkChars: Math.trunc(clamp(Number(value.chunkChars) || DEFAULT_SETTINGS.chunkChars, 60, 500)),
-    };
+    return normalizeSettings(stored[SETTINGS_KEY] || DEFAULT_SETTINGS);
   }
 
   async function respondWithExtract(mode) {
@@ -710,8 +812,22 @@
         }
 
         if (message.type === "WEB_READER_STOP") {
-          stopSpeaking();
-          sendResponse({ ok: true });
+          sendResponse(stopSpeaking());
+          return;
+        }
+
+        if (message.type === "WEB_READER_PAUSE") {
+          sendResponse(pauseSpeaking());
+          return;
+        }
+
+        if (message.type === "WEB_READER_RESUME") {
+          sendResponse(resumeSpeaking());
+          return;
+        }
+
+        if (message.type === "WEB_READER_STATUS") {
+          sendResponse(getPlayerStatus());
           return;
         }
 
@@ -725,9 +841,12 @@
           return;
         }
 
-        const settings = await loadSettings();
-
         if (message.type === "WEB_READER_SPEAK_TEXT") {
+          const baseSettings = await loadSettings();
+          const settings = normalizeSettings({
+            ...baseSettings,
+            ...(message.settings && typeof message.settings === "object" ? message.settings : {}),
+          });
           const text = normalizeSpaces(message.text);
           sendResponse(startSpeaking(text, settings));
           return;
@@ -735,6 +854,7 @@
 
         // Backward-compatible commands.
         if (message.type === "WEB_READER_READ_PAGE") {
+          const settings = await loadSettings();
           const extracted = await respondWithExtract("page");
           if (!extracted.ok) {
             sendResponse(extracted);
@@ -745,6 +865,7 @@
         }
 
         if (message.type === "WEB_READER_READ_X") {
+          const settings = await loadSettings();
           const extracted = await respondWithExtract("x");
           if (!extracted.ok) {
             sendResponse(extracted);

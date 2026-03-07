@@ -29,7 +29,8 @@ It supports two engines:
    - `Play` again: resume from paused position
 5. `Reset` stops and clears current playback immediately
 
-Browser TTS keeps speaking even if you navigate to another page, until `Reset` is pressed.
+On Chromium, Browser TTS keeps speaking even if you navigate to another page, until `Reset` is pressed.
+On Safari (converter build), Browser TTS falls back to tab-local playback (it keeps speaking after popup closes, but stops on page navigation/reload).
 
 ## Voicepeak mode (local)
 
@@ -69,6 +70,7 @@ Popup settings are persisted in `chrome.storage.local`:
 - Longform article extraction prioritizes `twitterArticleRichTextView`/`longformRichTextComponent` blocks.
 - Article/thread selection is based on detected DOM structure, not URL path patterns.
 - Browser TTS runs in an offscreen extension document, so playback is independent from tab navigation.
+- Safari does not support MV3 `offscreen`; Browser TTS falls back to tab-local playback in the active page.
 - Play/Pause resume behavior is available on both Browser TTS and Voicepeak (local bridge) engines.
 - Extraction is heuristic; complex layouts may include extra lines or miss some blocks.
 - This extension is passive (user-triggered only), not autonomous browsing.
